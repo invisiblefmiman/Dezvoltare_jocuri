@@ -1,0 +1,279 @@
+#include <SDL.h>
+#include <vector>
+#include <string>
+#include <ctime>
+#include <cstdlib>
+#include <algorithm>
+
+using namespace std;
+
+const int LATIME_ECRAN = 1024;
+const int INALTIME_ECRAN = 768;
+
+SDL_Renderer* randator = nullptr;
+SDL_Texture* textura = nullptr;
+bool ruleaza = true;
+int modCurent = 0;
+
+void ActualizareTitlu(SDL_Window* fereastra, string text, float deltaTimp) {
+    static float cronometru = 0;
+    static int cadre = 0;
+
+    cronometru += deltaTimp;
+    cadre++;
+
+    if (cronometru >= 1.0f) {
+        SDL_SetWindowTitle(fereastra, (text + " | FPS: " + to_string(cadre)).c_str());
+        cronometru = 0;
+        cadre = 0;
+    }
+}
+
+namespace Faza1 {
+    const int MAXIM_OBIECTE = 100000;
+    int numarObiecteCurente = 1000;
+    bool folosesteDOD = false;
+
+    struct Obiect {
+        float x, y, vitX, vitY;
+    };
+    vector<Obiect> listaOOP;
+
+    vector<float> dateX, dateY, dateVitX, dateVitY;
+
+    vector<int> grila[80][60];
+
+    void Initializare() {
+        listaOOP.resize(MAXIM_OBIECTE);
+        dateX.resize(MAXIM_OBIECTE); dateY.resize(MAXIM_OBIECTE);
+        dateVitX.resize(MAXIM_OBIECTE); dateVitY.resize(MAXIM_OBIECTE);
+
+        for (int i = 0; i < MAXIM_OBIECTE; i++) {
+            float randX = rand() % LATIME_ECRAN;
+            float randY = rand() % INALTIME_ECRAN;
+            float randVitX = (rand() % 200 - 100) / 10.f;
+            float randVitY = (rand() % 200 - 100) / 10.f;
+
+            listaOOP[i] = { randX, randY, randVitX, randVitY };
+            dateX[i] = randX; dateY[i] = randY;
+            dateVitX[i] = randVitX; dateVitY[i] = randVitY;
+        }
+    }
+
+    void Executa(float deltaTimp) {
+        for (int i = 0; i < 80; i++)
+            for (int j = 0; j < 60; j++)
+                grila[i][j].clear();
+
+        int limitaProcesare = min(numarObiecteCurente, MAXIM_OBIECTE);
+        SDL_SetRenderDrawColor(randator, 200, 50, 50, 255);
+
+        for (int i = 0; i < limitaProcesare; i++) {
+            float* pX, * pY, * pVitX, * pVitY;
+
+            if (folosesteDOD) {
+                pX = &dateX[i]; pY = &dateY[i]; pVitX = &dateVitX[i]; pVitY = &dateVitY[i];
+            }
+            else {
+                pX = &listaOOP[i].x; pY = &listaOOP[i].y; pVitX = &listaOOP[i].vitX; pVitY = &listaOOP[i].vitY;
+            }
+
+            *pX += *pVitX * deltaTimp * 60;
+            *pY += *pVitY * deltaTimp * 60;
+
+            if (*pX <= 0 || *pX >= LATIME_ECRAN) *pVitX *= -1;
+            if (*pY <= 0 || *pY >= INALTIME_ECRAN) *pVitY *= -1;
+
+            int celulaX = (int)(*pX / 16);
+            int celulaY = (int)(*pY / 16);
+
+            if (celulaX >= 0 && celulaX < 80 && celulaY >= 0 && celulaY < 60) {
+                grila[celulaX][celulaY].push_back(i);
+                if (grila[celulaX][celulaY].size() > 4) {
+                    *pVitX *= -1; *pVitY *= -1;
+                }
+            }
+
+            if (i < 5000) {
+                SDL_Rect rect = { (int)*pX, (int)*pY, 4, 4 };
+                SDL_RenderCopy(randator, textura, 0, &rect);
+            }
+        }
+    }
+}
+
+namespace Faza2 {
+    const int MAXIM_ENTITATI = 1000;
+
+    bool activ[MAXIM_ENTITATI];
+    float pozX[MAXIM_ENTITATI], pozY[MAXIM_ENTITATI], vitX[MAXIM_ENTITATI], vitY[MAXIM_ENTITATI];
+    int latime[MAXIM_ENTITATI], inaltime[MAXIM_ENTITATI];
+    int rosu[MAXIM_ENTITATI], verde[MAXIM_ENTITATI], albastru[MAXIM_ENTITATI];
+    int tip[MAXIM_ENTITATI];
+    int viata[MAXIM_ENTITATI];
+
+    int scor = 0;
+    bool jocTerminat = false;
+
+    int CreeazaEntitate(int t, float x, float y, int l, int i, int r, int v, int a) {
+        for (int idx = 0; idx < MAXIM_ENTITATI; idx++) {
+            if (!activ[idx]) {
+                activ[idx] = true;
+                tip[idx] = t;
+                pozX[idx] = x; pozY[idx] = y;
+                latime[idx] = l; inaltime[idx] = i;
+                rosu[idx] = r; verde[idx] = v; albastru[idx] = a;
+                vitX[idx] = 0; vitY[idx] = 0;
+                viata[idx] = 1;
+                return idx;
+            }
+        }
+        return -1;
+    }
+
+    void Initializare() {
+        fill(activ, activ + MAXIM_ENTITATI, false);
+        scor = 0;
+        jocTerminat = false;
+
+        int jucator = CreeazaEntitate(1, 100, 300, 32, 32, 0, 255, 0);
+        viata[jucator] = 100;
+
+        CreeazaEntitate(0, 300, 500, 300, 20, 100, 100, 100);
+
+        for (int i = 0; i < 5; i++) {
+            int inamic = CreeazaEntitate(2, 500 + i * 80, 300, 40, 40, 255, 0, 0);
+            vitX[inamic] = -100;
+        }
+        for (int i = 0; i < 5; i++) {
+            CreeazaEntitate(3, 400 + i * 50, 150, 16, 16, 255, 215, 0);
+        }
+    }
+
+    void Actualizare(float deltaTimp) {
+        if (jocTerminat) {
+            if (SDL_GetKeyboardState(0)[SDL_SCANCODE_R]) Initializare();
+            return;
+        }
+
+        for (int i = 0; i < MAXIM_ENTITATI; i++) {
+            if (!activ[i]) continue;
+
+            if (tip[i] == 1) {
+                const Uint8* tastatura = SDL_GetKeyboardState(0);
+                vitX[i] = (tastatura[SDL_SCANCODE_D] - tastatura[SDL_SCANCODE_A]) * 300;
+                vitY[i] = (tastatura[SDL_SCANCODE_S] - tastatura[SDL_SCANCODE_W]) * 300;
+
+                static float timpReincarcare = 0;
+                timpReincarcare -= deltaTimp;
+
+                if (tastatura[SDL_SCANCODE_SPACE] && timpReincarcare <= 0) {
+                    int glont = CreeazaEntitate(4, pozX[i] + 32, pozY[i] + 10, 8, 8, 255, 255, 255);
+                    vitX[glont] = 600;
+                    timpReincarcare = 0.2f;
+                }
+            }
+
+            pozX[i] += vitX[i] * deltaTimp;
+            pozY[i] += vitY[i] * deltaTimp;
+
+            if (tip[i] == 2) {
+                if (pozX[i] < 400) vitX[i] = 100;
+                if (pozX[i] > 900) vitX[i] = -100;
+            }
+            if (tip[i] == 4 && pozX[i] > LATIME_ECRAN) activ[i] = false;
+
+            SDL_Rect rect1 = { (int)pozX[i], (int)pozY[i], latime[i], inaltime[i] };
+
+            for (int j = 0; j < MAXIM_ENTITATI; j++) {
+                if (i == j || !activ[j]) continue;
+                SDL_Rect rect2 = { (int)pozX[j], (int)pozY[j], latime[j], inaltime[j] };
+
+                if (SDL_HasIntersection(&rect1, &rect2)) {
+                    if (tip[i] == 1 && tip[j] == 3) {
+                        activ[j] = false;
+                        scor += 10;
+                    }
+                    if (tip[i] == 1 && tip[j] == 2) {
+                        viata[i] -= 1;
+                        activ[j] = false;
+                        if (viata[i] <= 0) jocTerminat = true;
+                    }
+                    if (tip[i] == 4 && tip[j] == 2) {
+                        activ[i] = false;
+                        activ[j] = false;
+                        scor += 50;
+                    }
+                    if (tip[i] == 1 && tip[j] == 0) {
+                        pozX[i] -= vitX[i] * deltaTimp;
+                        pozY[i] -= vitY[i] * deltaTimp;
+                    }
+                }
+            }
+
+            SDL_SetTextureColorMod(textura, rosu[i], verde[i], albastru[i]);
+            SDL_RenderCopy(randator, textura, 0, &rect1);
+        }
+    }
+}
+
+int main(int argc, char* argv[]) {
+    srand(time(0));
+
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) return -1;
+
+    SDL_Window* fereastra = SDL_CreateWindow("Proiect Final Simplificat", 100, 100, LATIME_ECRAN, INALTIME_ECRAN, SDL_WINDOW_SHOWN);
+    randator = SDL_CreateRenderer(fereastra, -1, SDL_RENDERER_ACCELERATED);
+
+    SDL_Surface* suprafata = SDL_CreateRGBSurface(0, 1, 1, 32, 0, 0, 0, 0);
+    SDL_FillRect(suprafata, 0, 0xFFFFFFFF);
+    textura = SDL_CreateTextureFromSurface(randator, suprafata);
+    SDL_FreeSurface(suprafata);
+
+    Faza1::Initializare();
+    Faza2::Initializare();
+
+    Uint64 timpAnterior = SDL_GetPerformanceCounter();
+
+    while (ruleaza) {
+        Uint64 timpPrezent = SDL_GetPerformanceCounter();
+        float deltaTimp = (float)(timpPrezent - timpAnterior) / SDL_GetPerformanceFrequency();
+        timpAnterior = timpPrezent;
+
+        SDL_Event eveniment;
+        while (SDL_PollEvent(&eveniment)) {
+            if (eveniment.type == SDL_QUIT) ruleaza = false;
+
+            if (eveniment.type == SDL_KEYDOWN) {
+                if (eveniment.key.keysym.sym == SDLK_1) modCurent = 1;
+                if (eveniment.key.keysym.sym == SDLK_2) modCurent = 2;
+                if (eveniment.key.keysym.sym == SDLK_ESCAPE) modCurent = 0;
+
+                if (modCurent == 1) {
+                    if (eveniment.key.keysym.sym == SDLK_SPACE) Faza1::folosesteDOD = !Faza1::folosesteDOD;
+                    if (eveniment.key.keysym.sym == SDLK_UP) Faza1::numarObiecteCurente += 1000;
+                    if (eveniment.key.keysym.sym == SDLK_DOWN) Faza1::numarObiecteCurente -= 1000;
+                }
+            }
+        }
+
+        SDL_SetRenderDrawColor(randator, 10, 10, 10, 255);
+        SDL_RenderClear(randator);
+
+        if (modCurent == 0) {
+            ActualizareTitlu(fereastra, "MENIU: Apasa [1] Benchmark | [2] Joc", deltaTimp);
+        }
+        else if (modCurent == 1) {
+            Faza1::Executa(deltaTimp);
+            ActualizareTitlu(fereastra, "FAZA 1: " + string(Faza1::folosesteDOD ? "DOD (Date)" : "OOP (Obiecte)") + " Obiecte: " + to_string(Faza1::numarObiecteCurente), deltaTimp);
+        }
+        else {
+            Faza2::Actualizare(deltaTimp);
+            ActualizareTitlu(fereastra, "JOC | Scor: " + to_string(Faza2::scor) + " | Viata: " + to_string(Faza2::viata[0]) + (Faza2::jocTerminat ? " JOC TERMINAT (Apasa R)" : ""), deltaTimp);
+        }
+
+        SDL_RenderPresent(randator);
+    }
+
+    return 0;
+}
